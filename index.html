@@ -95,8 +95,8 @@
   #display::before { top: 0; background: linear-gradient(to bottom, var(--bg) 0%, transparent 100%); }
   #display::after  { bottom: 0; background: linear-gradient(to top, var(--bg) 0%, transparent 100%); }
   #scroll-area { width: 100%; max-width: 820px; padding: 180px 40px; transition: transform 0.65s cubic-bezier(0.4,0,0.2,1); }
-  .tp-line { font-family: var(--font-ui); font-size: clamp(18px,2.8vw,30px); font-weight: 400; line-height: 1.45; text-align: center; color: var(--dim); padding: 10px 0; }
-  .tp-line.past { color: #1e1e1e; }
+  .tp-line { font-family: var(--font-ui); font-size: clamp(18px,2.8vw,30px); font-weight: 400; line-height: 1.45; text-align: center; color: #3a3a3a; padding: 10px 0; }
+  .tp-line.past { color: #2a2a2a; }
   .tp-line.active { color: var(--text); font-size: clamp(28px,4.5vw,52px); font-weight: 700; letter-spacing: -0.01em; }
   .tp-line.blink { animation: tp-blink 0.38s step-end infinite; }
   @keyframes tp-blink { 0%,100% { color: var(--text); } 50% { color: var(--accent); } }
@@ -110,8 +110,9 @@
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 
   /* PROGRESS */
-  #progress-wrap { height: 2px; background: var(--surface2); }
+  #progress-wrap { height: 4px; background: var(--surface2); position: relative; }
   #progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s linear; }
+  #progress-line { position: absolute; top: 0; height: 100%; background: var(--green); opacity: 0.7; transition: left 0.5s linear, width 0.5s linear; pointer-events: none; }
 
   /* CONTROLS */
   #controls { display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: var(--surface); border-top: 1px solid var(--border); flex-wrap: wrap; }
@@ -176,7 +177,7 @@
   <div id="scroll-area"></div>
 </div>
 
-<div id="progress-wrap"><div id="progress-bar"></div></div>
+<div id="progress-wrap"><div id="progress-bar"></div><div id="progress-line"></div></div>
 
 <!-- CONTROLS -->
 <div id="controls">
@@ -345,6 +346,13 @@
     timerEl.textContent = fmt(elapsed);
     const maxT = lines.length ? lines[lines.length - 1].t : 0;
     progressBar.style.width = maxT > 0 ? Math.min(100, (elapsed / maxT) * 100) + '%' : '0%';
+    if (maxT > 0 && activeIdx >= 0) {
+      const lineStart = lines[activeIdx].t;
+      const lineEnd   = activeIdx < lines.length - 1 ? lines[activeIdx + 1].t : maxT;
+      const pLine = document.getElementById('progress-line');
+      pLine.style.left  = (lineStart / maxT * 100) + '%';
+      pLine.style.width = ((lineEnd - lineStart) / maxT * 100) + '%';
+    }
     let cur = -1;
     for (let i = 0; i < lines.length; i++) { if (elapsed >= lines[i].t) cur = i; }
     if (cur !== activeIdx) { activeIdx = cur; scrollTo(activeIdx); clearBlink(); }
@@ -379,6 +387,7 @@
     if (rafId) cancelAnimationFrame(rafId);
     elapsed = 0; activeIdx = -1;
     timerEl.textContent = '0:00'; progressBar.style.width = '0%';
+    const pLine = document.getElementById('progress-line'); pLine.style.left = '0'; pLine.style.width = '0';
     statusDot.className = 'stopped';
     clearBlink(); scrollTo(-1);
     btnPlay.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start`;
