@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Teleprompter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0d0d; --surface: #161616; --surface2: #1e1e1e;
+    --border: #2a2a2a; --border2: #383838; --text: #e8e4d9;
+    --muted: #555; --dim: #222; --accent: #e8c84a; --accent-dim: rgba(232,200,74,0.12);
+    --red: #c04a4a; --red-dim: rgba(192,74,74,0.12);
+    --green: #4a8c5c; --green-dim: rgba(74,140,92,0.12);
+    --radius: 8px; --font-ui: 'Syne', sans-serif; --font-mono: 'DM Mono', monospace;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* TOP BAR */
+  #topbar {
+    display: flex; align-items: center; gap: 10px; padding: 12px 20px;
+    background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  #topbar .logo { font-size: 13px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); margin-right: 8px; white-space: nowrap; }
+  #topbar select, #topbar input[type="text"] {
+    font-family: var(--font-ui); font-size: 13px; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border2); border-radius: var(--radius); padding: 6px 10px; outline: none;
+  }
+  #topbar select { cursor: pointer; min-width: 140px; }
+  #topbar input[type="text"] { width: 160px; }
+  #topbar input[type="text"]::placeholder { color: var(--muted); }
+  #topbar select:focus, #topbar input[type="text"]:focus { border-color: var(--accent); }
+  .sep { flex: 1; }
+
+  /* BUTTONS */
+  button {
+    font-family: var(--font-ui); font-size: 12px; font-weight: 500; letter-spacing: 0.06em;
+    text-transform: uppercase; cursor: pointer; border-radius: var(--radius); padding: 7px 14px;
+    border: 1px solid var(--border2); background: var(--surface2); color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s; white-space: nowrap; user-select: none;
+  }
+  button:hover { background: #272727; }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+  button.btn-primary { background: var(--accent); color: #0d0d0d; border-color: transparent; font-weight: 700; }
+  button.btn-primary:hover { background: #f0d85a; }
+  button.btn-danger { background: var(--red-dim); color: var(--red); border-color: rgba(192,74,74,0.3); }
+  button.btn-danger:hover { background: rgba(192,74,74,0.22); }
+  button.btn-success { background: var(--green-dim); color: #5ab870; border-color: rgba(74,140,92,0.3); }
+  button.btn-success:hover { background: rgba(74,140,92,0.22); }
+  button.btn-rec { background: rgba(192,74,74,0.15); color: var(--red); border-color: rgba(192,74,74,0.35); }
+  button.btn-rec:hover { background: rgba(192,74,74,0.25); }
+  button.btn-rec.recording { background: var(--red); color: #fff; border-color: transparent; animation: rec-pulse 1.4s ease-in-out infinite; }
+  button.btn-rec.paused-rec { background: rgba(192,74,74,0.3); color: var(--red); border-color: rgba(192,74,74,0.5); }
+  @keyframes rec-pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(192,74,74,0.5); } 50% { box-shadow: 0 0 0 6px rgba(192,74,74,0); } }
+  button svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* MIC MODAL */
+  #mic-modal {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
+  }
+  #mic-modal.open { display: flex; }
+  #mic-box {
+    background: var(--surface); border: 1px solid var(--border2); border-radius: 12px;
+    padding: 24px 28px; min-width: 320px; max-width: 480px; width: 90%;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  #mic-box h3 { font-size: 15px; font-weight: 700; color: var(--text); }
+  #mic-box p { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+  #mic-select {
+    font-family: var(--font-ui); font-size: 13px; background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border2); border-radius: var(--radius); padding: 8px 10px;
+    outline: none; cursor: pointer; width: 100%;
+  }
+  #mic-select:focus { border-color: var(--accent); }
+  #mic-box .mic-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* VU METER */
+  #vu-wrap { display: none; align-items: center; gap: 6px; padding: 0 4px; }
+  #vu-wrap.visible { display: flex; }
+  #vu-label { font-family: var(--font-mono); font-size: 11px; color: var(--red); letter-spacing: 0.05em; }
+  #vu-bar { width: 80px; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; border: 1px solid var(--border2); }
+  #vu-fill { height: 100%; width: 0%; background: var(--red); border-radius: 3px; transition: width 0.05s linear; }
+  #rec-time { font-family: var(--font-mono); font-size: 11px; color: var(--red); min-width: 36px; }
+
+  /* DISPLAY */
+  #display { flex: 1; background: var(--bg); overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; min-height: 320px; }
+  #display::before, #display::after { content: ''; position: absolute; left: 0; right: 0; height: 100px; z-index: 2; pointer-events: none; }
+  #display::before { top: 0; background: linear-gradient(to bottom, var(--bg) 0%, transparent 100%); }
+  #display::after  { bottom: 0; background: linear-gradient(to top, var(--bg) 0%, transparent 100%); }
+  #scroll-area { width: 100%; max-width: 820px; padding: 180px 40px; transition: transform 0.65s cubic-bezier(0.4,0,0.2,1); }
+  .tp-line { font-family: var(--font-ui); font-size: clamp(18px,2.8vw,30px); font-weight: 400; line-height: 1.45; text-align: center; color: var(--dim); padding: 10px 0; }
+  .tp-line.past { color: #1e1e1e; }
+  .tp-line.active { color: var(--text); font-size: clamp(28px,4.5vw,52px); font-weight: 700; letter-spacing: -0.01em; }
+  .tp-line.blink { animation: tp-blink 0.38s step-end infinite; }
+  @keyframes tp-blink { 0%,100% { color: var(--text); } 50% { color: var(--accent); } }
+
+  /* HUD */
+  #hud { position: absolute; top: 16px; right: 20px; z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; pointer-events: none; }
+  #timer { font-family: var(--font-mono); font-size: 28px; font-weight: 500; color: var(--accent); letter-spacing: 0.05em; line-height: 1; }
+  #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); align-self: flex-end; transition: background 0.3s; }
+  #status-dot.running { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+  #status-dot.stopped { background: var(--red); }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+  /* PROGRESS */
+  #progress-wrap { height: 2px; background: var(--surface2); }
+  #progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.5s linear; }
+
+  /* CONTROLS */
+  #controls { display: flex; align-items: center; gap: 8px; padding: 12px 20px; background: var(--surface); border-top: 1px solid var(--border); flex-wrap: wrap; }
+
+  /* EDITOR */
+  #editor-panel { display: none; background: var(--surface); border-top: 1px solid var(--border); padding: 16px 20px 20px; }
+  #editor-panel .editor-help { font-size: 12px; color: var(--muted); margin-bottom: 8px; font-family: var(--font-mono); }
+  #editor-panel .editor-help code { color: var(--accent); background: var(--accent-dim); padding: 1px 5px; border-radius: 4px; }
+  #editor-panel textarea { font-family: var(--font-mono); font-size: 13px; line-height: 1.7; width: 100%; min-height: 200px; background: var(--bg); color: var(--text); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px 14px; resize: vertical; outline: none; caret-color: var(--accent); }
+  #editor-panel textarea:focus { border-color: var(--accent); }
+  #editor-panel .editor-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+  @media (max-width: 600px) {
+    #topbar, #controls { gap: 6px; padding: 10px 14px; }
+    #scroll-area { padding: 140px 20px; }
+    #timer { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- MIC PICKER MODAL -->
+<div id="mic-modal">
+  <div id="mic-box">
+    <h3>🎙 Choose microphone</h3>
+    <p>Select the input device to use for recording.</p>
+    <select id="mic-select"><option value="">Loading devices…</option></select>
+    <div class="mic-actions">
+      <button id="mic-cancel">Cancel</button>
+      <button id="mic-confirm" class="btn-primary">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14M8.46 15.54a5 5 0 0 1 0-7.07"/></svg>
+        Start recording
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <span class="logo">⬛ Prompt</span>
+  <select id="doc-select" title="Select document"></select>
+  <input id="doc-name" type="text" placeholder="Document name…" />
+  <button id="btn-save" class="btn-success">
+    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    Save
+  </button>
+  <button id="btn-new">
+    <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    New
+  </button>
+  <button id="btn-del" class="btn-danger">
+    <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+  </button>
+</div>
+
+<!-- DISPLAY -->
+<div id="display">
+  <div id="hud">
+    <div id="timer">0:00</div>
+    <div id="status-dot"></div>
+  </div>
+  <div id="scroll-area"></div>
+</div>
+
+<div id="progress-wrap"><div id="progress-bar"></div></div>
+
+<!-- CONTROLS -->
+<div id="controls">
+  <button id="btn-play" class="btn-primary">
+    <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Start
+  </button>
+  <button id="btn-pause">
+    <svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+    Pause
+  </button>
+  <button id="btn-stop">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+    Stop
+  </button>
+  <button id="btn-restart">
+    <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+    Restart
+  </button>
+
+  <div class="sep"></div>
+
+  <!-- VU METER -->
+  <div id="vu-wrap">
+    <span id="vu-label">REC</span>
+    <div id="vu-bar"><div id="vu-fill"></div></div>
+    <span id="rec-time">0:00</span>
+  </div>
+
+  <button id="btn-rec" class="btn-rec">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg>
+    Record
+  </button>
+
+  <button id="btn-edit">
+    <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    Edit script
+  </button>
+</div>
+
+<!-- EDITOR -->
+<div id="editor-panel">
+  <p class="editor-help">One cue per line — format: <code>seconds  text</code> &nbsp;·&nbsp; <code>0 Welcome everyone!</code> &nbsp;·&nbsp; <code>12 Next topic begins here.</code></p>
+  <textarea id="tp-textarea" spellcheck="true"></textarea>
+  <div class="editor-actions">
+    <button id="btn-apply" class="btn-primary">
+      <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      Apply
+    </button>
+    <button id="btn-cancel">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Cancel
+    </button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const DEFAULT = `0 Welcome! This is your teleprompter.
+5 Lines appear when their timestamp is reached.
+12 The active line is highlighted in white and larger.
+20 A yellow blink warns you the next line is coming soon.
+28 Use the controls below to start, pause, and stop.
+35 You can edit this script and save multiple documents.
+42 Good luck with your presentation!`;
+
+  const LS_PREFIX = 'tp_doc_', LS_INDEX = 'tp_idx';
+
+  /* ── STATE ── */
+  let lines = [], elapsed = 0, running = false, lastTick = null, rafId = null, activeIdx = -1;
+  let lineOffsets = [], baseScrollH = 0; // precomputed at render time (all lines normal size)
+
+  /* ── RECORDING STATE ── */
+  let mediaRecorder = null, recChunks = [], recStream = null;
+  let recElapsed = 0, recLastTick = null, recRafId = null;
+  let vuCtx = null, vuAnalyser = null, vuSource = null, vuRafId = null;
+  let selectedDeviceId = null;
+  let recState = 'idle'; // idle | recording | paused
+
+  /* ── ELEMENTS ── */
+  const scrollArea  = document.getElementById('scroll-area');
+  const timerEl     = document.getElementById('timer');
+  const progressBar = document.getElementById('progress-bar');
+  const statusDot   = document.getElementById('status-dot');
+  const docSelect   = document.getElementById('doc-select');
+  const docNameInp  = document.getElementById('doc-name');
+  const editorPanel = document.getElementById('editor-panel');
+  const textarea    = document.getElementById('tp-textarea');
+  const btnPlay     = document.getElementById('btn-play');
+  const btnPause    = document.getElementById('btn-pause');
+  const btnStop     = document.getElementById('btn-stop');
+  const btnRec      = document.getElementById('btn-rec');
+  const vuWrap      = document.getElementById('vu-wrap');
+  const vuFill      = document.getElementById('vu-fill');
+  const recTimeEl   = document.getElementById('rec-time');
+  const micModal    = document.getElementById('mic-modal');
+  const micSelect   = document.getElementById('mic-select');
+
+  /* ── PARSE / RENDER ── */
+  function parseScript(raw) {
+    return raw.trim().split('\n')
+      .map(l => { const m = l.match(/^(\d+(?:\.\d+)?)\s+(.*)/); return m ? { t: parseFloat(m[1]), text: m[2] } : null; })
+      .filter(Boolean).sort((a, b) => a.t - b.t);
+  }
+
+  function renderLines() {
+    scrollArea.innerHTML = '';
+    lines.forEach((l, i) => {
+      const d = document.createElement('div');
+      d.className = 'tp-line'; d.id = 'tl' + i; d.textContent = l.text;
+      scrollArea.appendChild(d);
+    });
+    // Pass 1: measure baseline positions (all lines at normal size)
+    baseScrollH = scrollArea.offsetHeight;
+    lineOffsets = lines.map((_, i) => {
+      const el = document.getElementById('tl' + i);
+      return el ? { top: el.offsetTop, height: el.offsetHeight, fontSize: null } : { top: 0, height: 0, fontSize: null };
+    });
+    // Pass 2: compute per-line font-size override for active state
+    const maxActiveH = Math.floor(document.getElementById('display').offsetHeight * 0.4);
+    lines.forEach((_, i) => {
+      const el = document.getElementById('tl' + i);
+      if (!el) return;
+      el.classList.add('active');
+      void el.offsetHeight;
+      let fs = parseFloat(getComputedStyle(el).fontSize);
+      while (el.offsetHeight > maxActiveH && fs > 14) {
+        fs = Math.max(14, fs - 2);
+        el.style.fontSize = fs + 'px';
+        void el.offsetHeight;
+      }
+      lineOffsets[i].fontSize = el.style.fontSize || null;
+      el.classList.remove('active');
+      el.style.fontSize = '';
+    });
+    scrollTo(-1);
+  }
+
+  function scrollTo(idx) {
+    lines.forEach((_, i) => {
+      const el = document.getElementById('tl' + i);
+      if (!el) return;
+      el.classList.remove('active', 'past', 'blink');
+      el.style.fontSize = '';
+      if (i < idx) el.classList.add('past');
+      else if (i === idx) {
+        el.classList.add('active');
+        if (lineOffsets[i] && lineOffsets[i].fontSize) el.style.fontSize = lineOffsets[i].fontSize;
+      }
+    });
+    if (idx >= 0 && lineOffsets[idx]) {
+      const { top, height } = lineOffsets[idx];
+      scrollArea.style.transform = `translateY(${baseScrollH / 2 - top - height / 2}px)`;
+    } else {
+      scrollArea.style.transform = 'translateY(0)';
+    }
+  }
+
+  function fmt(s) { const m = Math.floor(s / 60), sec = Math.floor(s % 60); return m + ':' + (sec < 10 ? '0' : '') + sec; }
+
+  /* ── PROMPTER PLAYBACK ── */
+  function tick(ts) {
+    if (!running) return;
+    if (lastTick !== null) elapsed += (ts - lastTick) / 1000;
+    lastTick = ts;
+    timerEl.textContent = fmt(elapsed);
+    const maxT = lines.length ? lines[lines.length - 1].t : 0;
+    progressBar.style.width = maxT > 0 ? Math.min(100, (elapsed / maxT) * 100) + '%' : '0%';
+    let cur = -1;
+    for (let i = 0; i < lines.length; i++) { if (elapsed >= lines[i].t) cur = i; }
+    if (cur !== activeIdx) { activeIdx = cur; scrollTo(activeIdx); clearBlink(); }
+    if (activeIdx >= 0 && activeIdx < lines.length - 1) {
+      const warn = lines[activeIdx + 1].t - elapsed;
+      if (warn <= 2 && warn > 0) startBlink(activeIdx); else clearBlink();
+    }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function startBlink(i) { const el = document.getElementById('tl' + i); if (el && !el.classList.contains('blink')) el.classList.add('blink'); }
+  function clearBlink() { document.querySelectorAll('.tp-line.blink').forEach(e => e.classList.remove('blink')); }
+
+  function playPrompter() {
+    if (running || !lines.length) return;
+    running = true; lastTick = null;
+    statusDot.className = 'running';
+    btnPlay.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Running…`;
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function pausePrompter() {
+    if (!running) return;
+    running = false; lastTick = null;
+    if (rafId) cancelAnimationFrame(rafId);
+    statusDot.className = '';
+    btnPlay.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Resume`;
+  }
+
+  function stopPrompter() {
+    running = false; lastTick = null;
+    if (rafId) cancelAnimationFrame(rafId);
+    elapsed = 0; activeIdx = -1;
+    timerEl.textContent = '0:00'; progressBar.style.width = '0%';
+    statusDot.className = 'stopped';
+    clearBlink(); scrollTo(-1);
+    btnPlay.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Start`;
+    btnPlay.className = 'btn-primary';
+  }
+
+  /* ── RECORDING ── */
+  async function populateMicList() {
+    try {
+      // Request permission first so labels appear
+      const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+      tmp.getTracks().forEach(t => t.stop());
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const mics = devices.filter(d => d.kind === 'audioinput');
+      micSelect.innerHTML = '';
+      mics.forEach((d, i) => {
+        const o = document.createElement('option');
+        o.value = d.deviceId;
+        o.textContent = d.label || `Microphone ${i + 1}`;
+        if (d.deviceId === selectedDeviceId) o.selected = true;
+        micSelect.appendChild(o);
+      });
+      if (!mics.length) micSelect.innerHTML = '<option value="">No microphones found</option>';
+    } catch(e) {
+      micSelect.innerHTML = '<option value="">Permission denied</option>';
+    }
+  }
+
+  btnRec.onclick = async () => {
+    if (recState === 'idle') {
+      await populateMicList();
+      micModal.classList.add('open');
+    } else if (recState === 'recording') {
+      pauseRecording();
+      pausePrompter();
+    } else if (recState === 'paused') {
+      resumeRecording();
+      playPrompter();
+    }
+  };
+
+  document.getElementById('mic-cancel').onclick = () => micModal.classList.remove('open');
+  document.getElementById('mic-confirm').onclick = async () => {
+    selectedDeviceId = micSelect.value;
+    micModal.classList.remove('open');
+    await startRecording(selectedDeviceId);
+    playPrompter();
+  };
+
+  async function startRecording(deviceId) {
+    try {
+      const constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+      recStream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      // VU meter
+      vuCtx = new (window.AudioContext || window.webkitAudioContext)();
+      vuAnalyser = vuCtx.createAnalyser();
+      vuAnalyser.fftSize = 256;
+      vuSource = vuCtx.createMediaStreamSource(recStream);
+      vuSource.connect(vuAnalyser);
+      startVU();
+
+      recChunks = [];
+      const mimeType = getSupportedMime();
+      mediaRecorder = new MediaRecorder(recStream, mimeType ? { mimeType } : {});
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recChunks.push(e.data); };
+      mediaRecorder.onstop = () => downloadRecording();
+      mediaRecorder.start(200);
+
+      recElapsed = 0; recLastTick = null;
+      recState = 'recording';
+      updateRecBtn();
+      vuWrap.classList.add('visible');
+      startRecTimer();
+    } catch(e) {
+      alert('Could not access microphone: ' + e.message);
+    }
+  }
+
+  function getSupportedMime() {
+    const types = ['audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/ogg'];
+    return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+  }
+
+  function pauseRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') mediaRecorder.pause();
+    stopVU(); stopRecTimer();
+    recState = 'paused';
+    updateRecBtn();
+  }
+
+  function resumeRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'paused') mediaRecorder.resume();
+    startVU(); startRecTimer();
+    recState = 'recording';
+    updateRecBtn();
+  }
+
+  function stopRecording() {
+    if (!mediaRecorder) return;
+    stopVU(); stopRecTimer();
+    if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+    if (recStream) recStream.getTracks().forEach(t => t.stop());
+    if (vuCtx) { vuCtx.close(); vuCtx = null; }
+    recStream = null; mediaRecorder = null;
+    recState = 'idle';
+    recElapsed = 0; recTimeEl.textContent = '0:00';
+    vuWrap.classList.remove('visible');
+    vuFill.style.width = '0%';
+    updateRecBtn();
+  }
+
+  function downloadRecording() {
+    if (!recChunks.length) return;
+    const mime = recChunks[0].type || 'audio/webm';
+    const blob = new Blob(recChunks, { type: mime });
+    const ext  = mime.includes('mp4') ? 'mp4' : mime.includes('ogg') ? 'ogg' : 'webm';
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'recording.' + ext;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+    recChunks = [];
+  }
+
+  function updateRecBtn() {
+    btnRec.classList.remove('recording', 'paused-rec');
+    if (recState === 'recording') {
+      btnRec.classList.add('recording');
+      btnRec.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause Rec`;
+    } else if (recState === 'paused') {
+      btnRec.classList.add('paused-rec');
+      btnRec.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg> Resume Rec`;
+    } else {
+      btnRec.innerHTML = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/></svg> Record`;
+    }
+  }
+
+  /* ── VU METER ── */
+  function startVU() {
+    if (!vuAnalyser) return;
+    const buf = new Uint8Array(vuAnalyser.frequencyBinCount);
+    function draw() {
+      vuAnalyser.getByteFrequencyData(buf);
+      const avg = buf.reduce((s, v) => s + v, 0) / buf.length;
+      vuFill.style.width = Math.min(100, avg * 2.2) + '%';
+      vuRafId = requestAnimationFrame(draw);
+    }
+    draw();
+  }
+  function stopVU() { if (vuRafId) cancelAnimationFrame(vuRafId); vuRafId = null; vuFill.style.width = '0%'; }
+
+  /* ── REC TIMER ── */
+  function recTick(ts) {
+    if (recLastTick !== null) recElapsed += (ts - recLastTick) / 1000;
+    recLastTick = ts;
+    recTimeEl.textContent = fmt(recElapsed);
+    recRafId = requestAnimationFrame(recTick);
+  }
+  function startRecTimer() { recLastTick = null; recRafId = requestAnimationFrame(recTick); }
+  function stopRecTimer()  { if (recRafId) cancelAnimationFrame(recRafId); recRafId = null; recLastTick = null; }
+
+  /* ── COMBINED CONTROLS ── */
+  btnPlay.onclick = () => {
+    if (running) return;
+    if (recState === 'paused') resumeRecording();
+    playPrompter();
+  };
+
+  btnPause.onclick = () => {
+    if (recState === 'recording') pauseRecording();
+    pausePrompter();
+  };
+
+  btnStop.onclick  = () => stopAll();
+  document.getElementById('btn-restart').onclick = () => { stopPrompter(); setTimeout(() => playPrompter(), 80); };
+
+  function stopAll() {
+    stopRecording();
+    stopPrompter();
+  }
+
+  /* ── EDITOR ── */
+  document.getElementById('btn-edit').onclick = () => {
+    editorPanel.style.display = editorPanel.style.display === 'none' || !editorPanel.style.display ? 'block' : 'none';
+    if (editorPanel.style.display === 'block') { textarea.value = lines.map(l => l.t + ' ' + l.text).join('\n'); textarea.focus(); pausePrompter(); if (recState === 'recording') pauseRecording(); }
+  };
+  document.getElementById('btn-apply').onclick = () => {
+    lines = parseScript(textarea.value); stopAll(); renderLines();
+    editorPanel.style.display = 'none'; saveCurrentDoc();
+  };
+  document.getElementById('btn-cancel').onclick = () => { editorPanel.style.display = 'none'; };
+
+  /* ── DOCS ── */
+  function getIndex() { try { return JSON.parse(localStorage.getItem(LS_INDEX) || '[]'); } catch { return []; } }
+  function saveIndex(i) { localStorage.setItem(LS_INDEX, JSON.stringify(i)); }
+  function loadDocList() {
+    const idx = getIndex(); docSelect.innerHTML = '';
+    idx.forEach(name => { const o = document.createElement('option'); o.value = name; o.textContent = name; docSelect.appendChild(o); });
+  }
+  function saveCurrentDoc() {
+    const name = docNameInp.value.trim() || 'Untitled';
+    const idx  = getIndex(); if (!idx.includes(name)) idx.push(name);
+    saveIndex(idx); localStorage.setItem(LS_PREFIX + name, lines.map(l => l.t + ' ' + l.text).join('\n'));
+    loadDocList(); docSelect.value = name;
+  }
+  function loadDoc(name) {
+    const raw = localStorage.getItem(LS_PREFIX + name);
+    if (raw) { lines = parseScript(raw); docNameInp.value = name; stopAll(); renderLines(); }
+  }
+  document.getElementById('btn-save').onclick = saveCurrentDoc;
+  document.getElementById('btn-new').onclick  = () => { stopAll(); lines = []; docNameInp.value = ''; renderLines(); editorPanel.style.display = 'block'; textarea.value = ''; textarea.focus(); };
+  document.getElementById('btn-del').onclick  = () => {
+    const name = docSelect.value; if (!name || !confirm('Delete "' + name + '"?')) return;
+    localStorage.removeItem(LS_PREFIX + name); saveIndex(getIndex().filter(n => n !== name));
+    loadDocList(); if (docSelect.value) loadDoc(docSelect.value); else { lines = []; stopAll(); renderLines(); }
+  };
+  docSelect.onchange = () => { if (docSelect.value) loadDoc(docSelect.value); };
+
+  /* ── INIT ── */
+  loadDocList();
+  const idx = getIndex();
+  if (idx.length) loadDoc(idx[idx.length - 1]);
+  else { lines = parseScript(DEFAULT); renderLines(); textarea.value = DEFAULT; }
+})();
+</script>
+</body>
+</html>
