@@ -95,11 +95,13 @@
   #display::before { top: 0; background: linear-gradient(to bottom, var(--bg) 0%, transparent 100%); }
   #display::after  { bottom: 0; background: linear-gradient(to top, var(--bg) 0%, transparent 100%); }
   #scroll-area { width: 100%; max-width: 820px; padding: 180px 40px; transition: transform 0.65s cubic-bezier(0.4,0,0.2,1); }
-  .tp-line { font-family: var(--font-ui); font-size: clamp(18px,2.8vw,30px); font-weight: 400; line-height: 1.45; text-align: center; color: #5b5757; padding: 18px 0; margin: 0 0.25em;
+  .tp-line { font-family: var(--font-ui); font-size: calc(var(--fs-base) * 1px); font-weight: 400; line-height: 1.45; text-align: center; color: #5b5757; padding: 18px 0; margin: 0 0.25em;
     transition: font-size 0.45s cubic-bezier(0.4,0,0.2,1), font-weight 0.45s ease, color 0.4s ease; }
   .tp-line.past { color: #2a2a2a; }
-  .tp-line.active { color: var(--text); font-size: clamp(28px,4.5vw,52px); font-weight: 700; letter-spacing: -0.01em; }
+  .tp-line.active { color: var(--text); font-size: calc(var(--fs-active) * 1px); font-weight: 700; letter-spacing: -0.01em; }
   .tp-line.blink { animation: tp-blink 0.38s step-end infinite; }
+  .tp-bold { color: var(--accent); font-weight: 700; }
+  .tp-line.active .tp-bold { color: var(--accent); }
   @keyframes tp-blink { 0%,100% { color: var(--text); } 50% { color: var(--accent); } }
 
   /* HUD */
@@ -199,6 +201,13 @@
     Restart
   </button>
 
+  <button id="btn-fs-down" title="Decrease font size">
+    <svg viewBox="0 0 24 24"><text x="3" y="18" font-size="14" font-family="sans-serif" fill="currentColor" stroke="none">A</text><text x="13" y="18" font-size="9" font-family="sans-serif" fill="currentColor" stroke="none">A</text><line x1="2" y1="21" x2="22" y2="21"/></svg>
+  </button>
+  <button id="btn-fs-up" title="Increase font size">
+    <svg viewBox="0 0 24 24"><text x="1" y="18" font-size="10" font-family="sans-serif" fill="currentColor" stroke="none">A</text><text x="10" y="18" font-size="15" font-family="sans-serif" fill="currentColor" stroke="none">A</text><line x1="2" y1="21" x2="22" y2="21"/></svg>
+  </button>
+
   <div class="sep"></div>
 
   <!-- VU METER -->
@@ -288,7 +297,9 @@
     scrollArea.innerHTML = '';
     lines.forEach((l, i) => {
       const d = document.createElement('div');
-      d.className = 'tp-line'; d.id = 'tl' + i; d.textContent = l.text;
+      d.className = 'tp-line'; d.id = 'tl' + i;
+      d.innerHTML = l.text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<span class="tp-bold">$1</span>');
       scrollArea.appendChild(d);
     });
     // Precompute scroll targets with transitions off so measurements are stable
@@ -558,7 +569,22 @@
     stopPrompter();
   }
 
-  /* ── EDITOR ── */
+  /* ── FONT SIZE ── */
+  const LS_FS = 'tp_fs';
+  const FS_STEP = 2, FS_MIN = 12, FS_MAX = 60;
+  let fsBase = parseInt(localStorage.getItem(LS_FS) || '24', 10);
+
+  function applyFontSize() {
+    const fsActive = Math.round(fsBase * 1.75);
+    document.documentElement.style.setProperty('--fs-base', fsBase);
+    document.documentElement.style.setProperty('--fs-active', fsActive);
+    localStorage.setItem(LS_FS, fsBase);
+    renderLines();
+  }
+
+  document.getElementById('btn-fs-up').onclick   = () => { if (fsBase < FS_MAX) { fsBase += FS_STEP; applyFontSize(); } };
+  document.getElementById('btn-fs-down').onclick = () => { if (fsBase > FS_MIN) { fsBase -= FS_STEP; applyFontSize(); } };
+
   document.getElementById('btn-edit').onclick = () => {
     editorPanel.style.display = editorPanel.style.display === 'none' || !editorPanel.style.display ? 'block' : 'none';
     if (editorPanel.style.display === 'block') { textarea.value = lines.map(l => l.t + ' ' + l.text).join('\n'); textarea.focus(); pausePrompter(); if (recState === 'recording') pauseRecording(); }
@@ -614,6 +640,10 @@
   });
 
   /* ── INIT ── */
+  // Apply stored font size (sets CSS vars; renderLines is called after lines are loaded)
+  const _fsActive = Math.round(fsBase * 1.75);
+  document.documentElement.style.setProperty('--fs-base', fsBase);
+  document.documentElement.style.setProperty('--fs-active', _fsActive);
   loadDocList();
   const idx = getIndex();
   if (idx.length) loadDoc(idx[idx.length - 1]);
